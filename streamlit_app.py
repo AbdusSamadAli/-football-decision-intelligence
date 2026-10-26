@@ -1,14 +1,42 @@
 import os
+from pathlib import Path
 
 import streamlit as st
+from dotenv import load_dotenv
 
 st.set_page_config(page_title="Football Decision Intelligence", page_icon="⚽", layout="wide")
 
-try:
-    for key, value in dict(st.secrets).items():
-        os.environ.setdefault(key, str(value))
-except Exception:
-    pass
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
+
+def _load_streamlit_secrets() -> str | None:
+    """Copy Streamlit secrets into the environment; return an error type if parsing failed."""
+    try:
+        items = dict(st.secrets)
+    except Exception as exc:
+        return type(exc).__name__
+    for key, value in items.items():
+        if isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                os.environ.setdefault(sub_key, str(sub_value))
+        else:
+            os.environ.setdefault(key, str(value))
+    return None
+
+
+secrets_error = _load_streamlit_secrets()
+
+if not os.environ.get("GROQ_API_KEY"):
+    st.error(
+        "**GROQ_API_KEY not found.**\n\n"
+        "On Streamlit Cloud: **Manage app → Settings → Secrets**, paste exactly this "
+        "(TOML format — the quotes are required, no section header):\n\n"
+        '```toml\nGROQ_API_KEY = "gsk_your_key_here"\n```\n\n'
+        "Save, then **Reboot app**. Locally, put `GROQ_API_KEY=...` in `.env`."
+        + (f"\n\n(Secrets could not be read: `{secrets_error}` — usually invalid TOML.)"
+           if secrets_error else "")
+    )
+    st.stop()
 
 import engine  # noqa: E402  (must load after secrets are in the environment)
 
